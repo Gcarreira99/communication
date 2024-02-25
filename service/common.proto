@@ -1,0 +1,58 @@
+syntax = "proto3";
+option go_package = "./service";
+
+message Amount {
+  string currency = 1;
+  int64 amount = 2;
+}
+
+message CreateRequest {
+  string from = 1;
+  string to = 2;
+  Amount total = 3;
+}
+
+message CreateResponse {
+  bytes pdf = 1;
+}
+
+message WriteDatabaseRequest {
+  string value = 1;
+}
+
+message WriteDatabaseResponse {
+  string value = 1;
+}
+
+message ReadDatabaseRequest {
+  string value = 1;
+}
+
+message ReadDatabaseResponse {
+  string value = 1;
+}
+
+message UpdateDatabaseRequest {
+  string value = 1;
+}
+
+message UpdateDatabaseResponse {
+  string value = 1;
+}
+
+message DeleteDatabaseRequest {
+  string value = 1;
+}
+
+message DeleteDatabaseResponse {
+  string value = 1;
+}
+
+service Service {
+  // Create an invoice
+  rpc Create (CreateRequest) returns (CreateResponse) {}
+  rpc WriteDatabase (WriteDatabaseRequest) returns (WriteDatabaseResponse) {}
+  rpc ReadDatabase (ReadDatabaseRequest) returns (ReadDatabaseResponse) {}
+  rpc UpdateDatabase (UpdateDatabaseRequest) returns (UpdateDatabaseResponse) {}
+  rpc DeleteDatabase (DeleteDatabaseRequest) returns (DeleteDatabaseResponse) {}
+}
