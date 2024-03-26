@@ -13,7 +13,7 @@
 ## File Structure
 The system file structure is the following:
 ```
-.
+communication
 ├── server
 │   ├── server.go
 │   └── ledger_bridge.go
@@ -46,14 +46,12 @@ The system file structure is the following:
 ```shellscript
 ./network.sh down
 ./network.sh up createChannel -c mychannel -ca
-./network.sh deployCC -ccn basic -ccp ~/project/chaincode/ -ccl go
+./network.sh deployCC -ccn basic -ccp path/to/chaincode/folder/ -ccl go
 ```
 3. [OPTIONAL] Open another terminal and run the following command to monitor the network:
 ```shellscript
 ./monitordocker.sh
 ```
-
-**_NOTE:_** **`~/project/chaincode/`** is the chaincode folder path.
 
 ### Deploy Neo4j Database
 1. Run the **`database_startup.sh`** to deploy a Neo4j database in a container.
@@ -75,25 +73,29 @@ cp -r --verbose transactions/twitter-v2-50/* transactions/neo4j
 ### Generate TLS Information
 - Run the script:
 ```shellscript
+cd scripts
 ./cert_generator.sh
 ```
+- After running the script is possible to access the certificates and keys inside the **`cert`** folder.
 
 ### Run proto file for generation
 - Run this command inside the main folder from the project:
 ```shellscript
+cd service
 protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative service/common.proto
 ```
 ### Run System
-1. To run the system's server is necessary the following commands:
+- To run the system's server is necessary the following commands:
 ```shellscript
 cd server
 go build
-sudo ./server
+./server
 ```
-2. To run the system's client is necessary the following commands:
+- To run the system's client is necessary the following commands:
 ```shellscript
 cd client
 go build
-sudo ./client
+./client
 ```
-**_NOTE:_** Both client and server need to run in **`sudo`** to access the TLS information.
+- To close the server is press **`Ctrl^C`**.
+- To close the client is only needed to use the client's shell and to type the **`exit`** command.
