@@ -10,6 +10,7 @@
   - [Generate TLS Information](#generate-tls-information)
   - [Proto file for gRPC generation](#proto-file-for-grpc-generation)
   - [Run System](#run-system)
+  - [Stop System](#stop-system)
 
 ## Used Environment
 - Hyperledger Fabric [test-network]
@@ -46,10 +47,11 @@ communication/
 
 ## Usage
 1. Deploy Hyperledger Fabric network, more precisely **`test-network`**.
-2. Deploy the Neo4j database
+2. Deploy the Neo4j database.
 3. Generate the TLS information to enable communication between the client and server.
 4. Run the proto file to generate the necessary gRPC functions for the client-server communication.
-5. Run the system, both client and server
+5. Run the system, both client and server.
+6. Stop the system.
 
 ### Deploy **`test-network`**
 1. Go to the **`fabric-samples`** repository that was downloaded during the [Section Installation](#installation). After that go to the **`test-network`** folder.
