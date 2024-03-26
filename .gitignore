@@ -2,3 +2,5 @@
 vendor/
 *.pem
 .idea/
+service/common.pb.go
+service/common_grpc.pb.go
