@@ -13,20 +13,20 @@
 ## File Structure
 The system file structure is the following:
 ```
-communication
-├── server
+communication/
+├── server/
 │   ├── server.go
 │   └── ledger_bridge.go
-├── service
+├── service/
 │   └── common.proto
-├── client
+├── client/
 │   └── client.go
-├── scripts
+├── scripts/
 │   ├── cert_generator.sh
 │   └── database_startup.sh
-├── chaincode
+├── chaincode/
 │   └── smartcontract.go
-├── cert
+├── cert/
 │   ├── server-ext.conf
 │   └── client-ext.conf
 │   
@@ -54,21 +54,31 @@ communication
 ```
 
 ### Deploy Neo4j Database
-1. Run the **`database_startup.sh`** to deploy a Neo4j database in a container.
-2. Send the dump file to the docker container:
+1. Run the database startup script to deploy a Neo4j database inside the docker container.
 ```shellscript
-docker cp ./twitter-v2-50.dump "docker_id":/var/lib/neo4j/twitter-v2-50.dump
+cd scripts
+./database_startup.sh
 ```
-3. Restore database from the dump file:
+2. Download the [dump file](https://github.com/neo4j-graph-examples/twitter-v2/blob/main/data/twitter-v2-50.dump) that was used in this project.
+3. To continue the guide is needed the ID of the docker where the Neo4j database is running. To access the ID, run the following command:
+```shellscript
+docker ps
+```
+4. Send the dump file to the docker container:
+```shellscript
+docker cp ./twitter-v2-50.dump docker_id:/var/lib/neo4j/twitter-v2-50.dump
+```
+5. Restore database from the dump file:
 ```shellscript
 neo4j-admin database load --from-path=/var/lib/neo4j/ twitter-v2-50 --overwrite-destination=true --verbose
 ```
-4. Overwrite the original info from **`neo4j`** database with **`twitter-v2-50`** database info:
+6. Overwrite the original info from **`neo4j`** database with **`twitter-v2-50`** database info:
 ```shellscript
 rm -rf databases/neo4j/*
 cp -r --verbose databases/twitter-v2-50/* databases/neo4j
 cp -r --verbose transactions/twitter-v2-50/* transactions/neo4j
 ```
+**_NOTE:_** There is a probability that eventually the Neo4j container will crash and present some problems when booting. In that case remove the container and run again the script. 
 
 ### Generate TLS Information
 - Run the script:
