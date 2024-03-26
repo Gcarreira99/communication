@@ -24,6 +24,12 @@ The system file structure is the following:
 ├── scripts
 │   ├── cert_generator.sh
 │   └── database_startup.sh
+├── chaincode
+│   └── smartcontract.go
+├── cert
+│   ├── server-ext.conf
+│   └── client-ext.conf
+│   
 └── README.md
 ```
 
@@ -67,13 +73,7 @@ cp -r --verbose transactions/twitter-v2-50/* transactions/neo4j
 ```
 
 ### Generate TLS Information
-1. Create folder for the TLS information:
-```shellscript
-cd /
-mkdir cert
-```
-2. Create two files, **`server-ext.conf`** and **`client-ext.conf`**. //TODO
-3. Run the script:
+- Run the script:
 ```shellscript
 ./cert_generator.sh
 ```

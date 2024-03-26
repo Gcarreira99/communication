@@ -1,4 +1,4 @@
-cd /keys/cd
+cd ../cert/
 
 # delete pem file
 rm *.pem 
@@ -17,7 +17,7 @@ openssl req -newkey rsa:4096 -nodes -keyout server-key.pem -out server-req.pem -
 # Sign the Web Server Certificate Request (CSR)
 openssl x509 -req -in server-req.pem -CA ca-cert.pem -CAkey ca-key.pem -CAcreateserial -out server-cert.pem -extfile server-ext.conf
 
-echo "	
+
 openssl x509 -in server-cert.pem -noout -text
 
 # Verify certificate

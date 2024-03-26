@@ -74,7 +74,7 @@ func deleteRequest(client pb.ServiceClient) {
 
 func loadCertificates() credentials.TransportCredentials {
 	// read ca's cert
-	caCert, err := ioutil.ReadFile("/keys/cert/ca-cert.pem")
+	caCert, err := ioutil.ReadFile("../cert/ca-cert.pem")
 	if err != nil {
 		log.Fatal(caCert)
 	}
@@ -85,7 +85,7 @@ func loadCertificates() credentials.TransportCredentials {
 	}
 
 	//read client cert
-	clientCert, err := tls.LoadX509KeyPair("/keys/cert/client-cert.pem", "/keys/cert/client-key.pem")
+	clientCert, err := tls.LoadX509KeyPair("../cert/client-cert.pem", "../cert/client-key.pem")
 	if err != nil {
 		log.Fatal(err)
 	}

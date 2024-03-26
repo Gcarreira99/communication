@@ -361,7 +361,7 @@ func (m *serviceServer) Create(ctx_c context.Context, request *service.CreateReq
 
 func loadCertificates() credentials.TransportCredentials {
 	// read ca's cert, verify to client's certificate
-	caPem, err := ioutil.ReadFile("/keys/cert/ca-cert.pem")
+	caPem, err := ioutil.ReadFile("../cert/ca-cert.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func loadCertificates() credentials.TransportCredentials {
 	}
 
 	// read server cert & key
-	serverCert, err := tls.LoadX509KeyPair("/keys/cert/server-cert.pem", "/keys/cert/server-key.pem")
+	serverCert, err := tls.LoadX509KeyPair("../cert/server-cert.pem", "../cert/server-key.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
