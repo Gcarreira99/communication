@@ -1,5 +1,16 @@
 # System Overall Setup
 
+## Index
+- [Used Environment](#used-environment)
+- [Installation](#installation)
+- [File Structure](#file-structure)
+- [Usage](#usage)
+  - [Deploy **`test-network`**](#deploy-test-network)
+  - [Deploy Neo4j Database](#deploy-neo4j-database)
+  - [Generate TLS Information](#generate-tls-information)
+  - [Proto file for gRPC generation](#proto-file-for-grpc-generation)
+  - [Run System](#run-system)
+
 ## Used Environment
 - Hyperledger Fabric [test-network]
 - WSL
@@ -41,7 +52,7 @@ communication/
 5. Run the system, both client and server
 
 ### Deploy **`test-network`**
-1. Go to the **`fabric-samples`** repository the was downloaded during the Installation section. After that go to the **`test-network`** folder.
+1. Go to the **`fabric-samples`** repository that was downloaded during the [Section Installation](#installation). After that go to the **`test-network`** folder.
 2. Run following commands in one terminal, one after the other finishes:
 ```shellscript
 ./network.sh down
@@ -68,11 +79,15 @@ docker ps
 ```shellscript
 docker cp ./twitter-v2-50.dump docker_id:/var/lib/neo4j/twitter-v2-50.dump
 ```
-5. Restore database from the dump file:
+5. Access the bash terminal of the  Neo4j container:
+```shellscript
+docker exec -it docker_id bash
+```
+6. Restore database from the dump file:
 ```shellscript
 neo4j-admin database load --from-path=/var/lib/neo4j/ twitter-v2-50 --overwrite-destination=true --verbose
 ```
-6. Overwrite the original info from **`neo4j`** database with **`twitter-v2-50`** database info:
+7. Overwrite the original info from **`neo4j`** database with **`twitter-v2-50`** database info:
 ```shellscript
 rm -rf databases/neo4j/*
 cp -r --verbose databases/twitter-v2-50/* databases/neo4j
@@ -88,7 +103,7 @@ cd scripts
 ```
 - After running the script is possible to access the certificates and keys inside the **`cert`** folder.
 
-### Run proto file for generation
+### Proto file for gRPC generation
 - Run this command inside the main folder from the project:
 ```shellscript
 cd service
@@ -107,5 +122,13 @@ cd client
 go build
 ./client
 ```
+
+### Stop System
 - To close the server is press **`Ctrl^C`**.
 - To close the client is only needed to use the client's shell and to type the **`exit`** command.
+- Stop the Neo4j container manually.
+- To close the Hyperledger Fabric containers go to the **`fabric-samples`**. After that run the following commands:
+```shellscript
+cd test-network
+./network.sh down
+```
