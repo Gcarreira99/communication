@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -35,12 +34,15 @@ type serviceServer struct {
 	service.UnimplementedServiceServer
 }
 
-type state struct {
-	Category string
-	Hash     string
+type Component struct {
+	Category string `json:"category"`
+	Hash     string `json:"hash"`
 }
 
-var blockchainContract *client.Contract
+type Asset struct {
+	Nodes         []Component `json:"nodes"`
+	Relationships []Component `json:"relationships"`
+}
 
 func hashConvert(input []byte) string {
 	hasher := sha1.New()
@@ -76,11 +78,11 @@ func checkRelationships(command string) []string {
 	return relationshipsList
 }
 
-func checkDatabaseStartup() (nodeStates []state, relationshipStates []state) {
+func checkDatabaseStartup() (data Asset) {
 	nodes := []string{"Link", "Source", "Tweet", "Hashtag", "User"}
 	relationships := []string{"CONTAINS", "TAGS", "POSTS", "FOLLOWS", "MENTIONS", "RETWEETS", "USING"}
-	var nodeArray []state
-	var relationshipArray []state
+	var nodeArray []Component
+	var relationshipArray []Component
 	//Check blockchain if the nodes hashes are exactly the same, checks by node category
 	for i := 0; i < len(nodes); i++ {
 		query := "MATCH (n: " + nodes[i] + ") RETURN n"
@@ -94,8 +96,9 @@ func checkDatabaseStartup() (nodeStates []state, relationshipStates []state) {
 
 		resultJson, _ := json.Marshal(result.Records)
 		resultHash := hashConvert(resultJson)
-		nodeState := state{Category: nodes[i], Hash: resultHash}
+		nodeState := Component{Category: nodes[i], Hash: resultHash}
 		nodeArray = append(nodeArray, nodeState)
+		//nodeHashes = append(nodeHashes, resultHash)
 	}
 	//Check blockchain if the relationships hashes are exactly the same
 	for i := 0; i < len(relationships); i++ {
@@ -110,22 +113,27 @@ func checkDatabaseStartup() (nodeStates []state, relationshipStates []state) {
 
 		resultJson, _ := json.Marshal(result.Records)
 		resultHash := hashConvert(resultJson)
-		relationshipState := state{Category: relationships[i], Hash: resultHash}
+		relationshipState := Component{Category: relationships[i], Hash: resultHash}
 		relationshipArray = append(relationshipArray, relationshipState)
+		//relationHashes = append(relationHashes, resultHash)
 	}
-	return nodeStates, relationshipStates
+	assetData := Asset{
+		Nodes:         nodeArray,
+		Relationships: relationshipArray,
+	}
+	return assetData
 }
 
-func checkDatabase(command string) (nodeStates []state, relationshipStates []state) {
+func checkDatabase(command string) (data Asset) {
 	var nodes []string
 	var relationships []string
 	nodes = checkNodes(command)
 	relationships = checkRelationships(command)
 	fmt.Println("Command nodes are: %v", nodes)
 	fmt.Println("Command relationships are: %v", relationships)
-	var nodeArray []state
-	var relationshipArray []state
-	//Check blockchain if the nodes hashes are exactly the same, checks by node category
+	var nodeArray []Component
+	var relationshipArray []Component
+	//Reading database to check blockchain if the nodes hashes are exactly the same, checks by node category
 	for i := 0; i < len(nodes); i++ {
 		result, err := neo4j.ExecuteQuery(ctx, driver,
 			command,
@@ -138,11 +146,11 @@ func checkDatabase(command string) (nodeStates []state, relationshipStates []sta
 
 		resultJson, _ := json.Marshal(result.Records)
 		resultHash := hashConvert(resultJson)
-		nodeState := state{Category: nodes[i], Hash: resultHash}
+		nodeState := Component{Category: nodes[i], Hash: resultHash}
 		nodeArray = append(nodeArray, nodeState)
 
 	}
-	//Check blockchain if the relationships hashes are exactly the same
+	///Reading database to check blockchain if the relationships hashes are exactly the same
 	for i := 0; i < len(relationships); i++ {
 		result, err := neo4j.ExecuteQuery(ctx, driver,
 			command,
@@ -155,10 +163,53 @@ func checkDatabase(command string) (nodeStates []state, relationshipStates []sta
 
 		resultJson, _ := json.Marshal(result.Records)
 		resultHash := hashConvert(resultJson)
-		relationshipState := state{Category: relationships[i], Hash: resultHash}
+		relationshipState := Component{Category: relationships[i], Hash: resultHash}
 		relationshipArray = append(relationshipArray, relationshipState)
 	}
-	return nodeStates, relationshipStates
+
+	assetData := Asset{
+		Nodes:         nodeArray,
+		Relationships: relationshipArray,
+	}
+
+	return assetData
+}
+
+func validateDatabaseBlockchain(componentsDatabase []Component, componentsBlockchain []Component) bool {
+	for i := 0; i < len(componentsDatabase); i++ {
+		category := componentsDatabase[i].Category
+		hash := componentsDatabase[i].Hash
+		if (category != "") && (hash != "") {
+			if (category != componentsBlockchain[i].Category) || (hash != componentsBlockchain[i].Hash) {
+				fmt.Printf("Database Component category: %s\n", category)
+				fmt.Printf("Blockchain Component category: %s\n", componentsBlockchain[i].Category)
+				fmt.Printf("Database Component hash: %s\n", hash)
+				fmt.Printf("Blockchain Component hash: %s\n", componentsBlockchain[i].Hash)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func checkSystemPortion(command string) (bool, Asset) {
+	dataDatabase := checkDatabase(command)
+	dataBlockchain := readLastAssetByID()
+
+	if (validateDatabaseBlockchain(dataDatabase.Nodes, dataBlockchain.Nodes) == true) && (validateDatabaseBlockchain(dataDatabase.Relationships, dataBlockchain.Relationships) == true) {
+		return true, dataDatabase
+	}
+	return false, Asset{}
+}
+
+func checkSystemWhole() (bool, Asset) {
+	dataDatabase := checkDatabaseStartup()
+	dataBlockchain := readLastAssetByID()
+
+	if (validateDatabaseBlockchain(dataDatabase.Nodes, dataBlockchain.Nodes) == true) && (validateDatabaseBlockchain(dataDatabase.Relationships, dataBlockchain.Relationships) == true) {
+		return true, dataDatabase
+	}
+	return false, Asset{}
 }
 
 func connectDatabase() (context.Context, neo4j.DriverWithContext) {
@@ -196,10 +247,14 @@ func disconnectDatabase() {
 	}(driver, ctx)
 }
 
-// Create a node representing a person named Alice
+// WriteDatabase Create a node representing a person named Alice
 func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.WriteDatabaseRequest) (*service.WriteDatabaseResponse, error) {
-	nodeArray, relationshipArray := checkDatabase(request.Value)
-	createState(blockchainContract, nodeArray, relationshipArray)
+	valid, data := checkSystemPortion(request.Value)
+	if valid == false {
+		return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS"}, nil
+	}
+
+	createAsset(data)
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
 		nil,
@@ -215,13 +270,18 @@ func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.Wr
 	return &service.WriteDatabaseResponse{Value: "WRITE SUCCESS"}, nil
 }
 
-// Retrieve all Person nodes
+// ReadDatabase Retrieve all Person nodes
 func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.ReadDatabaseRequest) (*service.ReadDatabaseResponse, error) {
-	_, _ = checkDatabase(request.Value)
 	if request.Value == "all" {
+		getAllAssets()
 		return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
+	} else if request.Value == "last" {
+		fmt.Println("[ReadDatabase/last]")
+		data, _ := checkSystemWhole()
+		dataJson, _ := json.Marshal(data)
+		return &service.ReadDatabaseResponse{Value: "[READ SUCCESS]\n" + string(dataJson)}, nil
 	}
-	getAllAssets(blockchainContract)
+	_ = checkDatabase(request.Value)
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
 		nil,
@@ -253,12 +313,10 @@ func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.Rea
 	}
 	fmt.Println(path)
 
-	//blockchainExecution()
-
 	return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
 }
 
-// Update node Alice to add an age property
+// UpdateDatabase Update node Alice to add an age property
 func (m *serviceServer) UpdateDatabase(ctx_c context.Context, request *service.UpdateDatabaseRequest) (*service.UpdateDatabaseResponse, error) {
 	result, err := neo4j.ExecuteQuery(ctx, driver, `
     MATCH (p:Person {name: $name})
@@ -277,7 +335,7 @@ func (m *serviceServer) UpdateDatabase(ctx_c context.Context, request *service.U
 	return &service.UpdateDatabaseResponse{Value: "UPDATE SUCCESS"}, nil
 }
 
-// Remove the Alice node
+// DeleteDatabase Remove the Alice node
 func (m *serviceServer) DeleteDatabase(ctx_c context.Context, request *service.DeleteDatabaseRequest) (*service.DeleteDatabaseResponse, error) {
 	// This does not delete _only_ p, but also all its relationships!
 	result, err := neo4j.ExecuteQuery(ctx, driver, `
@@ -303,7 +361,7 @@ func (m *serviceServer) Create(ctx_c context.Context, request *service.CreateReq
 
 func loadCertificates() credentials.TransportCredentials {
 	// read ca's cert, verify to client's certificate
-	caPem, err := ioutil.ReadFile("/keys/cd/ca-cert.pem")
+	caPem, err := ioutil.ReadFile("/keys/cert/ca-cert.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -315,7 +373,7 @@ func loadCertificates() credentials.TransportCredentials {
 	}
 
 	// read server cert & key
-	serverCert, err := tls.LoadX509KeyPair("/keys/cd/server-cert.pem", "/keys/cd/server-key.pem")
+	serverCert, err := tls.LoadX509KeyPair("/keys/cert/server-cert.pem", "/keys/cert/server-key.pem")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -350,11 +408,10 @@ func main() {
 	ctx, driver = connectDatabase()
 
 	//Create a blockchain connection
-	blockchainContract := blockchainConnectionStartup()
-	fmt.Printf("Blockchain's contract name: %s\n", blockchainContract.ContractName())
+	blockchainConnectionStartup()
 	//Add first state in the blockchain with the startup data
-	nodeState, relationshipState := checkDatabaseStartup()
-	createState(blockchainContract, nodeState, relationshipState)
+	assetData := checkDatabaseStartup()
+	createAsset(assetData)
 
 	//Handles CTRL^C signal to execute a graceful exit by closing the database connection
 	c := make(chan os.Signal, 1)
@@ -364,8 +421,17 @@ func main() {
 		if s == syscall.SIGINT {
 			fmt.Print(" ")
 			fmt.Println("Detected")
-			fmt.Println("Closing database connection...")
+			fmt.Println("Closing database & blockchain connection...")
 			disconnectDatabase()
+			err := gw.Close()
+			if err != nil {
+				return
+			}
+			err = clientConnection.Close()
+			if err != nil {
+				return
+			}
+			fmt.Println("Connections closed with success")
 			os.Exit(0)
 		}
 	}()

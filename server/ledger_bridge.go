@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 	"log"
 	"os"
 	"path"
@@ -33,26 +32,24 @@ const (
 
 var now = time.Now()
 var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
+var contract *client.Contract
+var clientConnection *grpc.ClientConn
+var gw *client.Gateway
+var lastAssetId string
 
-type SmartContract struct {
-	contractapi.Contract
+func createID() (id string) {
+	return fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 }
 
-type Asset struct {
-	Category string `json:"category"`
-	Hash     string `json:"hash"`
-}
-
-func blockchainConnectionStartup() *client.Contract {
+func blockchainConnectionStartup() {
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
-	clientConnection := newGrpcConnection()
-	defer clientConnection.Close()
+	clientConnection = newGrpcConnection()
 
 	id := newIdentity()
 	sign := newSign()
-
 	// Create a Gateway connection for a specific client identity
-	gw, err := client.Connect(
+	var err error
+	gw, err = client.Connect(
 		id,
 		client.WithSign(sign),
 		client.WithClientConnection(clientConnection),
@@ -65,7 +62,6 @@ func blockchainConnectionStartup() *client.Contract {
 	if err != nil {
 		panic(err)
 	}
-	defer gw.Close()
 
 	// Override default values for chaincode and channel name as they may differ in testing contexts.
 	chaincodeName := "basic"
@@ -79,53 +75,20 @@ func blockchainConnectionStartup() *client.Contract {
 	}
 
 	network := gw.GetNetwork(channelName)
-	return network.GetContract(chaincodeName)
+	contract = network.GetContract(chaincodeName)
+
+	//initLedger()
 }
 
-func blockchainExecution() {
-	// The gRPC client connection should be shared by all Gateway connections to this endpoint
-	clientConnection := newGrpcConnection()
-	defer clientConnection.Close()
+func initLedger() {
+	fmt.Printf("\n--> Submit Transaction: InitLedger, function creates the initial set of assets on the ledger \n")
 
-	id := newIdentity()
-	sign := newSign()
-
-	// Create a Gateway connection for a specific client identity
-	gw, err := client.Connect(
-		id,
-		client.WithSign(sign),
-		client.WithClientConnection(clientConnection),
-		// Default timeouts for different gRPC calls
-		client.WithEvaluateTimeout(5*time.Second),
-		client.WithEndorseTimeout(15*time.Second),
-		client.WithSubmitTimeout(5*time.Second),
-		client.WithCommitStatusTimeout(1*time.Minute),
-	)
+	_, err := contract.SubmitTransaction("InitLedger")
 	if err != nil {
-		panic(err)
-	}
-	defer gw.Close()
-
-	// Override default values for chaincode and channel name as they may differ in testing contexts.
-	chaincodeName := "basic"
-	if ccname := os.Getenv("CHAINCODE_NAME"); ccname != "" {
-		chaincodeName = ccname
+		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
 
-	channelName := "mychannel"
-	if cname := os.Getenv("CHANNEL_NAME"); cname != "" {
-		channelName = cname
-	}
-
-	network := gw.GetNetwork(channelName)
-	contract := network.GetContract(chaincodeName)
-
-	initLedger(contract)
-	getAllAssets(contract)
-	createAsset(contract)
-	readAssetByID(contract)
-	transferAssetAsync(contract)
-	exampleErrorHandling(contract)
+	fmt.Printf("*** Transaction committed successfully\n")
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.
@@ -138,7 +101,6 @@ func newGrpcConnection() *grpc.ClientConn {
 	certPool := x509.NewCertPool()
 	certPool.AddCert(certificate)
 	transportCredentials := credentials.NewClientTLSFromCert(certPool, gatewayPeer)
-
 	connection, err := grpc.Dial(peerEndpoint, grpc.WithTransportCredentials(transportCredentials))
 	if err != nil {
 		panic(fmt.Errorf("failed to create gRPC connection: %w", err))
@@ -204,21 +166,8 @@ func newSign() identity.Sign {
 	return sign
 }
 
-// This type of transaction would typically only be run once by an application the first time it was started after its
-// initial deployment. A new version of the chaincode deployed later would likely not need to run an "init" function.
-func initLedger(contract *client.Contract) {
-	fmt.Printf("\n--> Submit Transaction: InitLedger, function creates the initial set of assets on the ledger \n")
-
-	_, err := contract.SubmitTransaction("InitLedger")
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
-}
-
 // Evaluate a transaction to query ledger state.
-func getAllAssets(contract *client.Contract) {
+func getAllAssets() {
 	fmt.Println("\n--> Evaluate Transaction: GetAllAssets, function returns all the current assets on the ledger")
 
 	evaluateResult, err := contract.EvaluateTransaction("GetAllAssets")
@@ -226,47 +175,43 @@ func getAllAssets(contract *client.Contract) {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
 	result := formatJSON(evaluateResult)
-
+	fmt.Println("QUERY RESULT:")
 	fmt.Printf("*** Result:%s\n", result)
 }
 
-// Submit a transaction synchronously, blocking until it has been committed to the ledger.
-func createAsset(contract *client.Contract) {
-	fmt.Printf("\n--> Submit Transaction: CreateAsset, creates new asset with ID, Color, Size, Owner and AppraisedValue arguments \n")
+func createAsset(assetData Asset) {
+	fmt.Printf("\n--> Submit Transaction: CreateAsset, create new state with ID, Node states and Relationhips states arguments \n")
 
-	_, err := contract.SubmitTransaction("CreateAsset", assetId, "yellow", "5", "Tom", "1300")
+	assetJson, _ := json.Marshal(assetData)
+	id := createID()
+	returnValue, err := contract.SubmitTransaction("CreateAsset", id, string(assetJson))
+
 	if err != nil {
 		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
-
+	fmt.Printf("Response: %s", returnValue)
 	fmt.Printf("*** Transaction committed successfully\n")
-}
-
-func createState(contract *client.Contract, nodeStates []state, relationshipStates []state) {
-	fmt.Printf("\n--> Submit Transaction: CreateState, create new state with ID, Node states and Relationhips states arguments \n")
-
-	nodeJson, _ := json.Marshal(nodeStates)
-	relationshipJson, _ := json.Marshal(relationshipStates)
-
-	_, err := contract.SubmitTransaction("CreateAsset", string(nodeJson), string(relationshipJson))
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
+	lastAssetId = id
 }
 
 // Evaluate a transaction by assetID to query ledger state.
-func readAssetByID(contract *client.Contract) {
-	fmt.Printf("\n--> Evaluate Transaction: ReadAsset, function returns asset attributes\n")
+func readLastAssetByID() Asset {
+	fmt.Printf("\n--> Evaluate Transaction: GetAsset, function returns asset attributes\n")
 
-	evaluateResult, err := contract.EvaluateTransaction("ReadAsset", assetId)
+	responseByBytes, err := contract.EvaluateTransaction("GetAsset", lastAssetId)
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
-	result := formatJSON(evaluateResult)
-
+	result := formatJSON(responseByBytes)
 	fmt.Printf("*** Result:%s\n", result)
+
+	var response Asset
+	err2 := json.Unmarshal(responseByBytes, &response)
+	if err2 != nil {
+		panic(fmt.Errorf("[readLastAssetByID]: failed to unmarshal response: %w", err))
+	}
+
+	return response
 }
 
 // Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
