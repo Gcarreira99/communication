@@ -1,3 +1,4 @@
 #Ignore vendor folder and certifcates
 vendor/
 *.pem
+.idea/
