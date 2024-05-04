@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ import (
 var (
 	serverAddr = flag.String("addr", "localhost:3333", "The server address in the format of host:port")
 )
+
+var FILE_MODE bool
 
 func sendRequest(client pb.ServiceClient) {
 	//log.Printf("Looking for features within %v", request)
@@ -32,10 +35,10 @@ func sendRequest(client pb.ServiceClient) {
 	log.Println(answer)
 }
 
-func writeRequest(client pb.ServiceClient) {
+func writeRequest(client pb.ServiceClient, request string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	answer, err := client.WriteDatabase(ctx, &pb.WriteDatabaseRequest{Value: "Alice"})
+	answer, err := client.WriteDatabase(ctx, &pb.WriteDatabaseRequest{Value: request})
 	if err != nil {
 		log.Fatalf("client.Create failed: %v", err)
 	}
@@ -109,7 +112,38 @@ func commandOptions(reader *bufio.Reader) string {
 	return text
 }
 
+func fileReading(client pb.ServiceClient) {
+	data, err := os.Open("../scripts/generated_queries.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Create a new Scanner for the file.
+	scanner := bufio.NewScanner(data)
+	// Loop over all lines in the file and print them.
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "CREATE") {
+			writeRequest(client, line)
+		} else {
+			readRequest(client, line)
+		}
+	}
+}
+
 func main() {
+
+	if len(os.Args) < 2 {
+		fmt.Println("Missing parameter, provide Reading Mode flag!")
+		return
+	}
+	if os.Args[1] == "-f" {
+		FILE_MODE = true
+	} else if os.Args[1] == "-c" {
+		FILE_MODE = false
+	} else {
+		fmt.Println("Invalid parameter, provide Query Mode flag correctly!")
+		return
+	}
 
 	// Create tls based credential.
 	creds := loadCertificates()
@@ -129,6 +163,23 @@ func main() {
 	client := pb.NewServiceClient(conn)
 	sendRequest(client)
 
+	//Once the file mode is active the client exits when finishing reading the input file
+	if FILE_MODE == true {
+		start := time.Now()
+		r := new(big.Int)
+		fmt.Println(r.Binomial(1000, 10))
+
+		fmt.Println("File Mode: reading file 'generated_queries.txt'")
+		fileReading(client)
+		fmt.Println("Success reading file!")
+		fmt.Println("Closing...")
+
+		elapsed := time.Since(start)
+		log.Printf("Binomial took %s", elapsed)
+		os.Exit(0)
+	}
+
+	//If file mode is not active the client accepts input commands from the command line
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Communication Shell")
 	fmt.Println("-------------------")
@@ -138,14 +189,12 @@ func main() {
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 
-		if strings.Compare("hi", text) == 0 {
-			fmt.Println("Hello, Yourself")
-		}
-
 		switch text {
 		case "write":
 			fmt.Println("write command")
-			writeRequest(client)
+			text, _ := reader.ReadString('\n')
+			text = strings.Replace(text, "\n", "", -1)
+			writeRequest(client, text)
 		case "read":
 			fmt.Println("read command")
 			readRequest(client, commandOptions(reader))

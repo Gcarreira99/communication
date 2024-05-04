@@ -4,3 +4,4 @@ vendor/
 .idea/
 service/common.pb.go
 service/common_grpc.pb.go
+scripts/generated_queries.txt

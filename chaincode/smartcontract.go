@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
@@ -10,19 +9,9 @@ type SmartContract struct {
 	contractapi.Contract
 }
 
-type Component struct {
-	Category string `json:"category"`
-	Hash     string `json:"hash"`
-}
-
-type Asset struct {
-	Nodes         []Component `json:"nodes"`
-	Relationships []Component `json:"relationships"`
-}
-
 type QueryResult struct {
-	Key    string `json:"Key"`
-	Record Asset
+	Key   string `json:"Key"`
+	Asset string `json:"Asset"`
 }
 
 func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, assetID string, data string) error {
@@ -58,11 +47,10 @@ func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface
 		if err != nil {
 			return nil, err
 		}
-		block := new(Asset)
-		_ = json.Unmarshal(queryResponse.Value, &block)
+		asset := string(queryResponse.Value)
 		queryResult := QueryResult{
-			Key:    queryResponse.Key,
-			Record: *block,
+			Key:   queryResponse.Key,
+			Asset: asset,
 		}
 		results = append(results, queryResult)
 	}

@@ -1,0 +1,3 @@
+CREATE (m:User{following: '80912', name: 'TEST', statuses: '83291', profile_image_url: 'http://test2.url.jpg', location: 'TEST_UNKNOW', url: 'https://t.co/niJS9kaI.com', followers: '28093', screen_name: 'TESTname'})
+CREATE (m:User{following: '80912', name: 'TEST2', statuses: '83291', profile_image_url: 'http://test2.url.jpg', location: 'TEST_UNKNOW_2', url: 'https://t.co/niJS9kaI_2.com', followers: '28093', screen_name: 'TESTname_2'})
+MATCH (n:User), (m:User) WHERE n.profile_image_url = 'http://test2.url.jpg' AND m.profile_image_url = 'http://test2.url.jpg' CREATE (n)-[s:FOLLOWS]->(m) RETURN n,s,m

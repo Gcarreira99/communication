@@ -35,7 +35,11 @@ var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 var contract *client.Contract
 var clientConnection *grpc.ClientConn
 var gw *client.Gateway
-var lastAssetId string
+
+type FabricResult struct {
+	Key   string `json:"Key"`
+	Asset string `json:"Asset"`
+}
 
 func createID() (id string) {
 	return fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
@@ -76,19 +80,6 @@ func blockchainConnectionStartup() {
 
 	network := gw.GetNetwork(channelName)
 	contract = network.GetContract(chaincodeName)
-
-	//initLedger()
-}
-
-func initLedger() {
-	fmt.Printf("\n--> Submit Transaction: InitLedger, function creates the initial set of assets on the ledger \n")
-
-	_, err := contract.SubmitTransaction("InitLedger")
-	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction: %w", err))
-	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
 }
 
 // newGrpcConnection creates a gRPC connection to the Gateway server.
@@ -167,51 +158,40 @@ func newSign() identity.Sign {
 }
 
 // Evaluate a transaction to query ledger state.
-func getAllAssets() {
+func getAllAssets() []FabricResult {
 	fmt.Println("\n--> Evaluate Transaction: GetAllAssets, function returns all the current assets on the ledger")
-
+	var results []FabricResult
 	evaluateResult, err := contract.EvaluateTransaction("GetAllAssets")
 	if err != nil {
 		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
+	fmt.Println(evaluateResult)
+	if len(evaluateResult) < 1 {
+		return nil
+	}
+	err2 := json.Unmarshal(evaluateResult, &results)
+	if err2 != nil {
+		panic(fmt.Errorf("failed to unmarshal: %w", err))
+	}
+
 	result := formatJSON(evaluateResult)
+
 	fmt.Println("QUERY RESULT:")
 	fmt.Printf("*** Result:%s\n", result)
+	return results
 }
 
-func createAsset(assetData Asset) {
+func createAsset(query string) {
 	fmt.Printf("\n--> Submit Transaction: CreateAsset, create new state with ID, Node states and Relationhips states arguments \n")
-
-	assetJson, _ := json.Marshal(assetData)
 	id := createID()
-	returnValue, err := contract.SubmitTransaction("CreateAsset", id, string(assetJson))
+	returnValue, err := contract.SubmitTransaction("CreateAsset", id, query)
 
 	if err != nil {
 		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
-	fmt.Printf("Response: %s", returnValue)
+	fmt.Printf("Asset created: %s + %s\n", id, query)
+	fmt.Printf("Response: %s\n", returnValue)
 	fmt.Printf("*** Transaction committed successfully\n")
-	lastAssetId = id
-}
-
-// Evaluate a transaction by assetID to query ledger state.
-func readLastAssetByID() Asset {
-	fmt.Printf("\n--> Evaluate Transaction: GetAsset, function returns asset attributes\n")
-
-	responseByBytes, err := contract.EvaluateTransaction("GetAsset", lastAssetId)
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	result := formatJSON(responseByBytes)
-	fmt.Printf("*** Result:%s\n", result)
-
-	var response Asset
-	err2 := json.Unmarshal(responseByBytes, &response)
-	if err2 != nil {
-		panic(fmt.Errorf("[readLastAssetByID]: failed to unmarshal response: %w", err))
-	}
-
-	return response
 }
 
 // Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing

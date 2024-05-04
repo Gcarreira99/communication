@@ -3,6 +3,7 @@ module communication
 go 1.21
 
 require (
+	github.com/google/uuid v1.3.1
 	github.com/hyperledger/fabric-contract-api-go v1.2.2
 	github.com/hyperledger/fabric-gateway v1.4.0
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.2.1
