@@ -28,14 +28,17 @@ The system file structure is the following:
 communication/
 ├── server/
 │   ├── server.go
-│   └── ledger_bridge.go
+│   ├── ledger_bridge.go
+│   └── verifier.go
 ├── service/
 │   └── common.proto
 ├── client/
 │   └── client.go
 ├── scripts/
 │   ├── cert_generator.sh
-│   └── database_startup.sh
+│   ├── startup_databases.sh
+│   ├── reverse_databases.sh
+│   └── query_generator.go
 ├── chaincode/
 │   └── smartcontract.go
 ├── cert/
@@ -67,10 +70,10 @@ communication/
 ```
 
 ### Deploy Neo4j Database
-1. Run the database startup script to deploy a Neo4j database inside the docker container.
+1. Run the startup script to deploy a Neo4j databases inside the docker containers.
 ```shellscript
 cd scripts
-./database_startup.sh
+./startup_databases.sh
 ```
 2. Download the [dump file](https://github.com/neo4j-graph-examples/twitter-v2/blob/main/data/twitter-v2-50.dump) that was used in this project.
 3. To continue the guide is needed the ID of the docker where the Neo4j database is running. To access the ID, run the following command:

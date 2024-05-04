@@ -5,3 +5,4 @@ vendor/
 service/common.pb.go
 service/common_grpc.pb.go
 scripts/generated_queries.txt
+server/query_log.txt
