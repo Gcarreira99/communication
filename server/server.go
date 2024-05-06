@@ -5,6 +5,7 @@ import (
 	context2 "context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
@@ -106,11 +107,13 @@ func disconnectDatabase() {
 
 // WriteDatabase Create a node representing a person named Alice
 func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.WriteDatabaseRequest) (*service.WriteDatabaseResponse, error) {
-	if SecureMode {
-		if !checkIntegrity() {
-			return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS: DATABASE COMPROMISED"}, nil
+	/*
+		if SecureMode {
+			if !checkIntegrity() {
+				return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS: DATABASE COMPROMISED"}, nil
+			}
 		}
-	}
+	*/
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
 		nil,
@@ -119,11 +122,11 @@ func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.Wr
 	if err != nil {
 		panic(err)
 	}
-
-	if SecureMode {
-		createAsset(request.Value)
-	}
-
+	/*
+		if SecureMode {
+			createAsset(request.Value)
+		}
+	*/
 	fmt.Printf("Created %v nodes in %+v.\n",
 		result.Summary.Counters().NodesCreated(),
 		result.Summary.ResultAvailableAfter())
@@ -136,41 +139,17 @@ func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.Rea
 		if !checkIntegrity() {
 			return &service.ReadDatabaseResponse{Value: "READ NOT SUCCESS: DATABASE COMPROMISED"}, nil
 		}
-		if request.Value == "all" {
+		if request.Value == "ALL" {
 			getAllAssets()
 			return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
 		}
 	}
-	result, err := neo4j.ExecuteQuery(ctx, driver,
-		request.Value,
-		nil,
-		neo4j.EagerResultTransformer,
-		neo4j.ExecuteQueryWithDatabase("neo4j"))
+	result, err := session.Run(ctx, `MATCH (n:User) WHERE n.screen_name='Batmanandsuper1' DETACH DELETE n`, nil)
 	if err != nil {
-		panic(err)
+		log.Fatalf("failed to listen: %v", err)
 	}
-
-	// Loop through results and do something with them
-	fmt.Println(result.Summary)
-	for _, record := range result.Records {
-		name, _ := record.Get("h.name")
-		fmt.Println(name)
-	}
-
-	// Summary information
-	fmt.Printf("The query `%v` returned %v records in %+v.\n",
-		result.Summary.Query().Text(), len(result.Records),
-		result.Summary.ResultAvailableAfter())
-
-	//Prints current directory
-	path, err := os.Getwd()
-	log.Print("-> Server current directory: ")
-	if err != nil {
-		log.Println(err)
-	}
-	fmt.Println(path)
-
-	return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
+	resultJson, _ := json.Marshal(result.Record())
+	return &service.ReadDatabaseResponse{Value: string(resultJson)}, nil
 }
 
 // UpdateDatabase Update node Alice to add an age property
