@@ -144,31 +144,33 @@ func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.Rea
 			return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
 		}
 	}
-	result, err := session.Run(ctx, `MATCH (n:User) WHERE n.screen_name='Batmanandsuper1' DETACH DELETE n`, nil)
+	result, err := neo4j.ExecuteQuery(ctx, driver,
+		request.Value,
+		nil,
+		neo4j.EagerResultTransformer,
+		neo4j.ExecuteQueryWithDatabase("neo4j"))
+	if err != nil {
+		panic(err)
+	}
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	resultJson, _ := json.Marshal(result.Record())
+	resultJson, _ := json.Marshal(result.Records)
 	return &service.ReadDatabaseResponse{Value: string(resultJson)}, nil
 }
 
 // UpdateDatabase Update node Alice to add an age property
 func (m *serviceServer) UpdateDatabase(ctx_c context.Context, request *service.UpdateDatabaseRequest) (*service.UpdateDatabaseResponse, error) {
-	result, err := neo4j.ExecuteQuery(ctx, driver, `
-    MATCH (p:Person {name: $name})
-    SET p.age = $age
-    `, map[string]any{
-		"name": "Alice",
-		"age":  42,
-	}, neo4j.EagerResultTransformer,
+	result, err := neo4j.ExecuteQuery(ctx, driver,
+		request.Value,
+		nil,
+		neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("neo4j"))
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Query updated the database?",
-		result.Summary.Counters().ContainsUpdates())
-
-	return &service.UpdateDatabaseResponse{Value: "UPDATE SUCCESS"}, nil
+	resultJson, _ := json.Marshal(result.Records)
+	return &service.UpdateDatabaseResponse{Value: string(resultJson)}, nil
 }
 
 // DeleteDatabase Remove the Alice node

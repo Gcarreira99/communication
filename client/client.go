@@ -52,7 +52,7 @@ func readRequest(client pb.ServiceClient, query string) {
 	if err != nil {
 		log.Fatalf("client.Create failed: %v", err)
 	}
-	log.Println(answer)
+	log.Println(answer.Value)
 }
 
 func updateRequest(client pb.ServiceClient) {
