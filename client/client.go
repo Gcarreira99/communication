@@ -5,7 +5,6 @@ import (
 	pb "communication/service"
 	"crypto/tls"
 	"crypto/x509"
-	"flag"
 	"fmt"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -14,15 +13,15 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-var (
-	serverAddr = flag.String("addr", "localhost:3333", "The server address in the format of host:port")
-)
-
-var FILE_MODE bool
+var FileMode bool
+var datasetNumber = "100"
+var datasetNumberReading = "100_ri"
+var workloadType = "ri/"
 
 func sendRequest(client pb.ServiceClient) {
 	//log.Printf("Looking for features within %v", request)
@@ -36,7 +35,7 @@ func sendRequest(client pb.ServiceClient) {
 }
 
 func writeRequest(client pb.ServiceClient, request string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
 	defer cancel()
 	answer, err := client.WriteDatabase(ctx, &pb.WriteDatabaseRequest{Value: request})
 	if err != nil {
@@ -46,7 +45,7 @@ func writeRequest(client pb.ServiceClient, request string) {
 }
 
 func readRequest(client pb.ServiceClient, query string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Second)
 	defer cancel()
 	answer, err := client.ReadDatabase(ctx, &pb.ReadDatabaseRequest{Value: query})
 	if err != nil {
@@ -112,34 +111,92 @@ func commandOptions(reader *bufio.Reader) string {
 	return text
 }
 
-func fileReading(client pb.ServiceClient) {
-	data, err := os.Open("../scripts/generated_queries.txt")
+func fileReading(client pb.ServiceClient) *os.File {
+	queryPath := "../scripts/generated_queries_" + datasetNumberReading + ".txt"
+	statsPath := "../../graphs/" + workloadType + "stats_" + datasetNumber + ".csv"
+	data, err := os.Open(queryPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	// Create a new Scanner for the file.
 	scanner := bufio.NewScanner(data)
+	//Csv Writer
+	csvFile, err := os.Create(statsPath)
+	_, err = fmt.Fprintf(csvFile, "Dataset,Latency,Usage\n")
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Loop over all lines in the file and print them.
 	for scanner.Scan() {
 		line := scanner.Text()
+		start := time.Now()
 		if strings.Contains(line, "CREATE") {
 			writeRequest(client, line)
 		} else {
 			readRequest(client, line)
 		}
+		elapsed := time.Since(start).Milliseconds()
+		writeStats(elapsed, csvFile)
+	}
+	return csvFile
+}
+
+func writeStats(elapsed int64, csvFile *os.File) {
+	datasetName := "dataset_" + datasetNumber
+
+	size, err := DirSize("../")
+	if err != nil {
+		panic(err)
+	}
+	_, err = fmt.Fprintf(csvFile, "%s,%d,%d\n", datasetName, elapsed, size)
+	if err != nil {
+		panic(err)
 	}
 }
 
-func main() {
+func writeThroughput(elapsed int64) {
+	throughputPath := "../../graphs/" + workloadType + "throughput_" + datasetNumber + ".csv"
+	datasetName := "dataset_" + datasetNumber
+	csvFile, err := os.Create(throughputPath)
+	_, err = fmt.Fprintf(csvFile, "x,y\n")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = fmt.Fprintf(csvFile, "%s,%d\n", datasetName, elapsed)
+	err = csvFile.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
+func DirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
+}
+
+func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Missing parameter, provide Reading Mode flag!")
 		return
 	}
+	//datasetNumberReading = os.Args[3]
+	//datasetNumber = os.Args[3] + "_" + os.Args[2]
 	if os.Args[1] == "-f" {
-		FILE_MODE = true
+		FileMode = true
 	} else if os.Args[1] == "-c" {
-		FILE_MODE = false
+		FileMode = false
 	} else {
 		fmt.Println("Invalid parameter, provide Query Mode flag correctly!")
 		return
@@ -148,10 +205,8 @@ func main() {
 	// Create tls based credential.
 	creds := loadCertificates()
 
-	//conn, err := grpc.Dial(*serverAddr, grpc.WithTransportCredentials(creds))
 	conn, err := grpc.Dial("0.0.0.0:3333", grpc.WithTransportCredentials(creds))
 	if err != nil {
-		//log.Fatalf("fail to dial: %v", err)
 		log.Fatal(err)
 	}
 	defer func(conn *grpc.ClientConn) {
@@ -164,17 +219,21 @@ func main() {
 	sendRequest(client)
 
 	//Once the file mode is active the client exits when finishing reading the input file
-	if FILE_MODE == true {
+	if FileMode == true {
 		start := time.Now()
 		r := new(big.Int)
 		fmt.Println(r.Binomial(1000, 10))
 
-		fmt.Println("File Mode: reading file 'generated_queries.txt'")
-		fileReading(client)
+		fmt.Printf("File Mode: reading file 'generated_queries_%s.txt'", datasetNumberReading)
+		csvFile := fileReading(client)
 		fmt.Println("Success reading file!")
 		fmt.Println("Closing...")
-
-		elapsed := time.Since(start)
+		err := csvFile.Close()
+		if err != nil {
+			return
+		}
+		elapsed := time.Since(start).Milliseconds()
+		writeThroughput(elapsed)
 		log.Printf("Binomial took %s", elapsed)
 		os.Exit(0)
 	}

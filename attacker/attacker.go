@@ -38,6 +38,10 @@ RETURN n`, nil)
 	if err != nil {
 		panic(err)
 	}
+	_, err = session.Run(ctx, `CREATE (m:Hashtag{name: 'ATTACKER'})`, nil)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func main() {

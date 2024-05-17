@@ -4,16 +4,13 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"strings"
-	"time"
-
-	"github.com/google/uuid"
+	"strconv"
 )
 
-// NodeLabels represents the available node labels
+// NodeLabels contains the labels of nodes
 var NodeLabels = []string{"Hashtag", "Link", "Source", "Tweet", "User"}
 
-// RelationshipTypes represents the available relationship types
+// RelationshipTypes defines the relationship types and the corresponding from-to labels
 var RelationshipTypes = map[string]map[string][]string{
 	"CONTAINS": {
 		"Tweet": {"Source"},
@@ -41,113 +38,12 @@ var RelationshipTypes = map[string]map[string][]string{
 	},
 }
 
-// PropertyKeys represents the available property keys
-var PropertyKeys = map[string][]string{
-	"Hashtag": {"name"},
-	"Link":    {"url"},
-	"Source":  {"name"},
-	"Tweet": {
-		"favorites", "import_method", "id_str", "created_at", "id", "text",
-	},
-	"User": {
-		"followers", "screen_name", "following", "name", "profile_image_url", "location", "url",
-	},
-}
-
-// GenerateRandomProperties generates random properties based on node label
-func GenerateRandomProperties(label string) map[string]interface{} {
-	properties := make(map[string]interface{})
-	rand.Seed(time.Now().UnixNano())
-	keys := PropertyKeys[label]
-	for _, key := range keys {
-		// Generate random value based on key
-		var value interface{}
-		switch key {
-		case "favorites":
-			value = rand.Intn(100)
-		case "import_method":
-			value = "user"
-		case "id_str":
-			value = generateNumericID()
-		case "created_at":
-			value = time.Now().Format(time.RFC3339)
-		case "id":
-			value = generateNumericID()
-		case "text":
-			value = "Random text " + uuid.New().String()[:4]
-		case "followers":
-			value = rand.Intn(100000)
-		case "screen_name":
-			value = "User" + uuid.New().String()[:4]
-		case "following":
-			value = rand.Intn(100000)
-		case "name":
-			value = "Name_" + uuid.New().String()[:4]
-		case "profile_image_url":
-			value = "http://random.url/" + uuid.New().String()[:4] + ".jpg"
-		case "location":
-			value = "Location_" + uuid.New().String()[:4]
-		case "url":
-			value = "http://random.url/" + uuid.New().String()[:4]
-		default:
-			value = "Unknown"
-		}
-		properties[key] = value
-	}
-	return properties
-}
-
-// GenerateCreateQuery generates a CREATE query
-func GenerateCreateQuery(label string, properties map[string]interface{}) string {
-	var props []string
-	for key, value := range properties {
-		switch v := value.(type) {
-		case string:
-			props = append(props, fmt.Sprintf(`%s: '%s'`, key, strings.ReplaceAll(v, `"`, `'`)))
-		case int:
-			props = append(props, fmt.Sprintf(`%s: %d`, key, v))
-		}
-	}
-	return fmt.Sprintf(`CREATE (m:%s {%s})`, label, strings.Join(props, ", "))
-}
-
-// GenerateRelationshipQuery generates a relationship creation query
-func GenerateRelationshipQuery(relationshipType, fromLabel, toLabel string) string {
-	conditions := make([]string, 0)
-
-	switch {
-	case fromLabel == "User" && toLabel == "User":
-		conditions = append(conditions, fmt.Sprintf("n.url = 'http://random.url/%s'", uuid.New().String()[:4]))
-		conditions = append(conditions, fmt.Sprintf("m.url = 'http://random.url/%s'", uuid.New().String()[:4]))
-	case fromLabel == "Tweet" && toLabel == "Tweet":
-		conditions = append(conditions, fmt.Sprintf("n.id_str = '%s'", generateNumericID()))
-		conditions = append(conditions, fmt.Sprintf("m.id_str = '%s'", generateNumericID()))
-	case fromLabel == "User" && toLabel == "Tweet":
-		conditions = append(conditions, fmt.Sprintf("n.url = 'http://random.url/%s'", uuid.New().String()[:4]))
-		conditions = append(conditions, fmt.Sprintf("m.id_str = '%s'", generateNumericID()))
-	case fromLabel == "Tweet" && toLabel == "User":
-		conditions = append(conditions, fmt.Sprintf("n.id_str = '%s'", generateNumericID()))
-		conditions = append(conditions, fmt.Sprintf("m.url = 'http://random.url/%s'", uuid.New().String()[:4]))
-	case fromLabel == "Tweet" && toLabel == "Hashtag":
-		conditions = append(conditions, fmt.Sprintf("n.id_str = '%s'", generateNumericID()))
-		conditions = append(conditions, fmt.Sprintf("m.name = 'Name_%s'", uuid.New().String()[:4]))
-	case fromLabel == "Tweet" && toLabel == "Source":
-		conditions = append(conditions, fmt.Sprintf("n.id_str = '%s'", generateNumericID()))
-		conditions = append(conditions, fmt.Sprintf("m.name = 'Name_%s'", uuid.New().String()[:4]))
-	}
-
-	return fmt.Sprintf(`MATCH (n:%s), (m:%s) WHERE %s AND %s CREATE (n)-[s:%s]->(m) RETURN n,s,m`, fromLabel, toLabel, conditions[0], conditions[1], relationshipType)
-}
-
-// generateNumericID generates a random numeric ID
-func generateNumericID() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("%d", rand.Intn(1000000000))
-}
+// NodeProperties contains the properties of nodes
+var NodeProperties = make(map[string]map[string]string)
 
 func main() {
 	// Open file for writing
-	file, err := os.Create("generated_queries.txt")
+	file, err := os.Create("generated_queries_400.txt")
 	if err != nil {
 		fmt.Println("Error creating file:", err)
 		return
@@ -155,30 +51,146 @@ func main() {
 	defer file.Close()
 
 	// Redirect output to file
-	fmt.Println("Generated queries are written into generated_queries.txt")
+	fmt.Println("Generated queries are written into generated_queries_25.txt")
 	os.Stdout = file
 
-	// Store created node IDs
-	var nodeIDs []string
-
 	// Generate CREATE queries for nodes
-	for i := 0; i < 5; i++ {
-		label := NodeLabels[rand.Intn(len(NodeLabels))]
+	nodeQueries := make([]string, 0, len(NodeLabels))
+	for _, label := range NodeLabels {
 		properties := GenerateRandomProperties(label)
-		if label == "Tweet" {
-			nodeIDs = append(nodeIDs, properties["id_str"].(string))
-		}
+		NodeProperties[label] = properties
 		createQuery := GenerateCreateQuery(label, properties)
-		fmt.Println(createQuery)
+		nodeQueries = append(nodeQueries, createQuery)
 	}
 
 	// Generate relationship creation queries
+	relationshipQueries := make([]string, 0, 25) // We'll generate 25 relationships initially
 	for relationshipType, fromToLabels := range RelationshipTypes {
 		for fromLabel, toLabels := range fromToLabels {
 			for _, toLabel := range toLabels {
-				relationshipQuery := GenerateRelationshipQuery(relationshipType, fromLabel, toLabel)
-				fmt.Println(relationshipQuery)
+				// Generate relationship queries with proper conditions on nodes' properties and values
+				fromProperty, fromValue := getRandomPropertyAndValue(fromLabel)
+				toProperty, toValue := getRandomPropertyAndValue(toLabel)
+				relationshipQuery := fmt.Sprintf("MATCH (n:%s {%s: '%s'}), (m:%s {%s: '%s'}) WHERE n.%s = '%s' AND m.%s = '%s' CREATE (n)-[:%s]->(m)", fromLabel, fromProperty, fromValue, toLabel, toProperty, toValue, fromProperty, fromValue, toProperty, toValue, relationshipType)
+				if relationshipQuery != "" {
+					relationshipQueries = append(relationshipQueries, relationshipQuery)
+				}
 			}
 		}
 	}
+
+	// Shuffle node and relationship queries separately
+	rand.Shuffle(len(nodeQueries), func(i, j int) {
+		nodeQueries[i], nodeQueries[j] = nodeQueries[j], nodeQueries[i]
+	})
+	rand.Shuffle(len(relationshipQueries), func(i, j int) {
+		relationshipQueries[i], relationshipQueries[j] = relationshipQueries[j], relationshipQueries[i]
+	})
+
+	// Determine the number of additional node queries needed to reach 200
+	numAdditionalNodeQueries := 200 - len(nodeQueries)
+	if numAdditionalNodeQueries > 0 {
+		for i := 0; i < numAdditionalNodeQueries; i++ {
+			label := NodeLabels[rand.Intn(len(NodeLabels))]
+			properties := GenerateRandomProperties(label)
+			NodeProperties[label] = properties
+			createQuery := GenerateCreateQuery(label, properties)
+			nodeQueries = append(nodeQueries, createQuery)
+		}
+	}
+
+	// Determine the number of additional relationship queries needed to reach 200
+	numAdditionalRelationshipQueries := 200 - len(relationshipQueries)
+	if numAdditionalRelationshipQueries > 0 {
+		for i := 0; i < numAdditionalRelationshipQueries; i++ {
+			relationshipType := ""
+			for rType := range RelationshipTypes {
+				relationshipType = rType
+				break
+			}
+			var fromLabel string
+			for fl := range RelationshipTypes[relationshipType] {
+				fromLabel = fl
+				break
+			}
+			toLabels := RelationshipTypes[relationshipType][fromLabel]
+			toLabel := toLabels[rand.Intn(len(toLabels))]
+			// Generate relationship queries with proper conditions on nodes' properties and values
+			fromProperty, fromValue := getRandomPropertyAndValue(fromLabel)
+			toProperty, toValue := getRandomPropertyAndValue(toLabel)
+			relationshipQuery := fmt.Sprintf("MATCH (n:%s {%s: '%s'}), (m:%s {%s: '%s'}) WHERE n.%s = '%s' AND m.%s = '%s' CREATE (n)-[:%s]->(m)", fromLabel, fromProperty, fromValue, toLabel, toProperty, toValue, fromProperty, fromValue, toProperty, toValue, relationshipType)
+			if relationshipQuery != "" {
+				relationshipQueries = append(relationshipQueries, relationshipQuery)
+			}
+		}
+	}
+
+	// Combine node and relationship queries to get 200 queries
+	allQueries := make([]string, 0, 200)
+	allQueries = append(allQueries, nodeQueries...)
+	allQueries = append(allQueries, relationshipQueries...)
+
+	// Output the queries
+	for _, query := range allQueries {
+		fmt.Println(query)
+	}
+}
+
+// Function to generate a random property and value for a given node label
+func getRandomPropertyAndValue(label string) (string, string) {
+	switch label {
+	case "Hashtag", "Source":
+		return "name", getRandomValue()
+	case "Link":
+		return "url", getRandomValue()
+	case "Tweet":
+		return "id_str", strconv.Itoa(rand.Intn(1000000)) // Assuming the id_str is only numeric
+	case "User":
+		properties := []string{"followers", "screen_name", "following", "name", "profile_image_url", "location", "url"}
+		property := properties[rand.Intn(len(properties))]
+		return property, getRandomValue()
+	default:
+		return "", ""
+	}
+}
+
+// Function to generate a random value
+func getRandomValue() string {
+	return strconv.Itoa(rand.Intn(1000000))
+}
+
+// Function to generate random properties for a given node label
+func GenerateRandomProperties(label string) map[string]string {
+	properties := make(map[string]string)
+	switch label {
+	case "Hashtag", "Source":
+		properties["name"] = getRandomValue()
+	case "Link":
+		properties["url"] = "http://example.com/" + getRandomValue()
+	case "Tweet":
+		properties["favorites"] = getRandomValue()
+		properties["import_method"] = "user"
+		properties["id_str"] = getRandomValue()
+		properties["created_at"] = "2022-01-01T00:00:00Z"
+		properties["text"] = "This is a sample tweet."
+	case "User":
+		properties["followers"] = getRandomValue()
+		properties["screen_name"] = "user" + getRandomValue()
+		properties["following"] = getRandomValue()
+		properties["name"] = "User " + getRandomValue()
+		properties["profile_image_url"] = "http://example.com/image" + getRandomValue() + ".jpg"
+		properties["location"] = "Location " + getRandomValue()
+		properties["url"] = "http://example.com/user" + getRandomValue()
+	}
+	return properties
+}
+
+// Function to generate a CREATE query for a node with given properties
+func GenerateCreateQuery(label string, properties map[string]string) string {
+	query := "CREATE (m:" + label + "{"
+	for key, value := range properties {
+		query += key + ": '" + value + "', "
+	}
+	query = query[:len(query)-2] + "})"
+	return query
 }

@@ -1,0 +1,25 @@
+MATCH (n:User) WHERE n.screen_name='neo4j' RETURN n
+MATCH (n:User) WHERE n.screen_name='NASAPersevere' RETURN n
+MATCH (n:User) WHERE n.screen_name='rhema_beth' RETURN n
+MATCH (n:User) WHERE n.screen_name='galeister' RETURN n
+MATCH (n:User) WHERE n.screen_name='AngeliusAngel' RETURN n
+MATCH (n:User) WHERE n.screen_name='michibertoldi' RETURN n
+MATCH (n:Link) RETURN n LIMIT 25
+MATCH (n:User) RETURN n LIMIT 25
+MATCH (n:Source) RETURN n LIMIT 25
+MATCH (n:Hashtag) RETURN n LIMIT 25
+MATCH (n:Tweet) RETURN n LIMIT 25
+MATCH p=()-[r:CONTAINS]->() RETURN p LIMIT 25
+MATCH p=()-[r:REPLY_TO]->() RETURN p LIMIT 25
+MATCH p=()-[r:POSTS]->() RETURN p LIMIT 25
+MATCH p=()-[r:MENTIONS]->() RETURN p LIMIT 25
+MATCH p=()-[r:RETWEETS]->() RETURN p LIMIT 25
+MATCH p=()-[r:USING]->() RETURN p LIMIT 25
+MATCH p=()-[r:TAGS]->() RETURN p LIMIT 25
+MATCH p=()-[r:FOLLOWS]->() RETURN p LIMIT 25
+MATCH (n:Tweet) WHERE n.id_str='1371815021265747970' RETURN n
+MATCH (n) WHERE (n.url) IS NOT NULL RETURN DISTINCT "node" as entity, n.url AS url LIMIT 25 UNION ALL MATCH ()-[r]-() WHERE (r.url) IS NOT NULL RETURN DISTINCT "relationship" AS entity, r.url AS url LIMIT 25
+CREATE (m:User{following: '326412', name: 'User 724255', profile_image_url: 'http://example.com/image277332.jpg', location: 'Location 558087', url: 'http://example.com/user558372', followers: '868514', screen_name: 'user404192'})
+MATCH (n:User) WHERE n.screen_name='neo4j' RETURN n
+MATCH (n:Me) RETURN n LIMIT 25
+MATCH (n:Tweet) WHERE n.id_str='1371815021265747970' RETURN n

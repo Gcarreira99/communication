@@ -22,7 +22,6 @@ import (
 
 var ctx context.Context
 var driver neo4j.DriverWithContext
-var session neo4j.SessionWithContext
 var SecureMode bool
 var port = flag.Int("port", 3333, "the port to serve on")
 
@@ -33,44 +32,64 @@ type serviceServer struct {
 }
 
 func checkIntegrity() bool {
-	result, err := session.Run(ctx, `MATCH (n)-[r]->(m) RETURN n,r,m`, nil)
-	if err != nil {
-		// Handle error
-		fmt.Println("Error querying database:", err)
-		panic(err)
-	}
-
-	//Querying Verifier
-	results := getAllAssets()
-	if results != nil {
-		//Creating/Updating Verifier database
-		for _, element := range results {
-			fmt.Printf("TRANSACTION: %s\n", element.Asset)
-			_, errV := sessionV.Run(ctxV, element.Asset, nil)
-			if errV != nil {
-				// Handle error
-				fmt.Println("CREATE ASSET: Error querying verifier:", errV)
+	blockchainResults := getByRangeAsset()
+	if blockchainResults != nil {
+		//Query Primary database
+		resultNodes, err := neo4j.ExecuteQuery(ctx, driver,
+			`MATCH (n) RETURN n`,
+			nil,
+			neo4j.EagerResultTransformer,
+			neo4j.ExecuteQueryWithDatabase("neo4j"))
+		if err != nil {
+			panic(err)
+		}
+		resultRelationships, err := neo4j.ExecuteQuery(ctx, driver,
+			`MATCH p=()-->() RETURN p`,
+			nil,
+			neo4j.EagerResultTransformer,
+			neo4j.ExecuteQueryWithDatabase("neo4j"))
+		if err != nil {
+			panic(err)
+		}
+		//Updating Verifier
+		fmt.Println("Updating Verifier database")
+		for _, element := range blockchainResults {
+			_, err := neo4j.ExecuteQuery(ctxV, driverV,
+				element.Asset,
+				nil,
+				neo4j.EagerResultTransformer,
+				neo4j.ExecuteQueryWithDatabase("neo4j"))
+			if err != nil {
 				panic(err)
 			}
 		}
+
+		//Querying Verifier database
+		resultVNodes, err := neo4j.ExecuteQuery(ctxV, driverV,
+			`MATCH (n) RETURN n`,
+			nil,
+			neo4j.EagerResultTransformer,
+			neo4j.ExecuteQueryWithDatabase("neo4j"))
+		if err != nil {
+			panic(err)
+		}
+		resultVRelationships, err := neo4j.ExecuteQuery(ctxV, driverV,
+			`MATCH p=()-->() RETURN p`,
+			nil,
+			neo4j.EagerResultTransformer,
+			neo4j.ExecuteQueryWithDatabase("neo4j"))
+		if err != nil {
+			panic(err)
+		}
+		//Confirming if both databases possess the same data state
+		if !checkAssets(resultNodes, resultVNodes) {
+			return false
+		}
+		if !checkAssets(resultRelationships, resultVRelationships) {
+			return false
+		}
 	}
-	//Querying the all Verifier database
-	resultV, errV := sessionV.Run(ctxV, `MATCH (n)-[r]->(m) RETURN n,r,m`, nil)
-	if errV != nil {
-		// Handle error
-		fmt.Println("Error querying verifier:", errV)
-		panic(err)
-	}
-	//Confirming if both databases possess the same data state
-	var state bool
-	if result.Record() == resultV.Record() {
-		fmt.Println("TRUE: same state!")
-		state = true
-	} else {
-		fmt.Println("FALSE: different state!")
-		state = false
-	}
-	return state
+	return true
 }
 
 func connectDatabase() (context.Context, neo4j.DriverWithContext) {
@@ -107,13 +126,11 @@ func disconnectDatabase() {
 
 // WriteDatabase Create a node representing a person named Alice
 func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.WriteDatabaseRequest) (*service.WriteDatabaseResponse, error) {
-	/*
-		if SecureMode {
-			if !checkIntegrity() {
-				return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS: DATABASE COMPROMISED"}, nil
-			}
+	/*if SecureMode {
+		if !checkIntegrity() {
+			return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS: DATABASE COMPROMISED"}, nil
 		}
-	*/
+	}*/
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
 		nil,
@@ -122,27 +139,24 @@ func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.Wr
 	if err != nil {
 		panic(err)
 	}
-	/*
-		if SecureMode {
-			createAsset(request.Value)
-		}
-	*/
+	if SecureMode {
+		createAsset(request.Value)
+	}
 	fmt.Printf("Created %v nodes in %+v.\n",
 		result.Summary.Counters().NodesCreated(),
 		result.Summary.ResultAvailableAfter())
 	return &service.WriteDatabaseResponse{Value: "WRITE SUCCESS"}, nil
 }
 
-// ReadDatabase Retrieve all Person nodes
 func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.ReadDatabaseRequest) (*service.ReadDatabaseResponse, error) {
 	if SecureMode {
 		if !checkIntegrity() {
 			return &service.ReadDatabaseResponse{Value: "READ NOT SUCCESS: DATABASE COMPROMISED"}, nil
 		}
-		if request.Value == "ALL" {
-			getAllAssets()
-			return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
-		}
+	}
+	if request.Value == "ALL" {
+		getAllAssets()
+		return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
 	}
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
@@ -259,7 +273,6 @@ func main() {
 	log.Printf("server listening at %v", lis.Addr())
 	//Creates a database connection
 	ctx, driver = connectDatabase()
-	session = driver.NewSession(ctx, neo4j.SessionConfig{DatabaseName: "neo4j"})
 
 	if SecureMode {
 		//Create a blockchain connection
@@ -277,8 +290,8 @@ func main() {
 			fmt.Println("Detected")
 			fmt.Println("Closing databases & blockchain connections...")
 			disconnectDatabase()
-			disconnectVerifier()
 			if SecureMode {
+				disconnectVerifier()
 				err := gw.Close()
 				if err != nil {
 					return
@@ -292,7 +305,6 @@ func main() {
 			os.Exit(0)
 		}
 	}()
-
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

@@ -2,22 +2,19 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/hyperledger/fabric-gateway/pkg/client"
 	"github.com/hyperledger/fabric-gateway/pkg/identity"
-	"github.com/hyperledger/fabric-protos-go-apiv2/gateway"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -30,8 +27,6 @@ const (
 	gatewayPeer  = "peer0.org1.example.com"
 )
 
-var now = time.Now()
-var assetId = fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
 var contract *client.Contract
 var clientConnection *grpc.ClientConn
 var gw *client.Gateway
@@ -41,9 +36,8 @@ type FabricResult struct {
 	Asset string `json:"Asset"`
 }
 
-func createID() (id string) {
-	return fmt.Sprintf("asset%d", now.Unix()*1e3+int64(now.Nanosecond())/1e6)
-}
+var startKey = 1000000
+var endKey = 1000000
 
 func blockchainConnectionStartup() {
 	// The gRPC client connection should be shared by all Gateway connections to this endpoint
@@ -102,14 +96,13 @@ func newGrpcConnection() *grpc.ClientConn {
 
 // newIdentity creates a client identity for this Gateway connection using an X.509 certificate.
 func newIdentity() *identity.X509Identity {
-
 	//Prints current directory
-	path, err := os.Getwd()
+	dir, err := os.Getwd()
 	log.Print("-> Ledger Bridge current directory: ")
 	if err != nil {
 		log.Println(err)
 	}
-	fmt.Println(path)
+	fmt.Println(dir)
 
 	certificate, err := loadCertificate(certPath)
 	if err != nil {
@@ -176,89 +169,45 @@ func getAllAssets() []FabricResult {
 
 	result := formatJSON(evaluateResult)
 
-	fmt.Println("QUERY RESULT:")
 	fmt.Printf("*** Result:%s\n", result)
 	return results
 }
 
 func createAsset(query string) {
-	fmt.Printf("\n--> Submit Transaction: CreateAsset, create new state with ID, Node states and Relationhips states arguments \n")
-	id := createID()
-	returnValue, err := contract.SubmitTransaction("CreateAsset", id, query)
+	//fmt.Printf("\n--> Submit Transaction: CreateAsset, create new state with ID and query arguments \n")
+	_, err := contract.SubmitTransaction("CreateAsset", strconv.Itoa(endKey), query)
 
 	if err != nil {
 		panic(fmt.Errorf("failed to submit transaction: %w", err))
 	}
-	fmt.Printf("Asset created: %s + %s\n", id, query)
-	fmt.Printf("Response: %s\n", returnValue)
 	fmt.Printf("*** Transaction committed successfully\n")
+	endKey += 1
 }
 
-// Submit transaction asynchronously, blocking until the transaction has been sent to the orderer, and allowing
-// this thread to process the chaincode response (e.g. update a UI) without waiting for the commit notification
-func transferAssetAsync(contract *client.Contract) {
-	fmt.Printf("\n--> Async Submit Transaction: TransferAsset, updates existing asset owner")
-
-	submitResult, commit, err := contract.SubmitAsync("TransferAsset", client.WithArguments(assetId, "Mark"))
+func getByRangeAsset() []FabricResult {
+	fmt.Printf("\n--> Evaluate Transaction: GetByRangeAsset\n")
+	var results []FabricResult
+	if startKey == endKey {
+		fmt.Printf("StartKey & EndKey: SAME VALUE!")
+		return nil
+	}
+	fmt.Printf("startKey: %s; endKey: %s\n", strconv.Itoa(startKey), strconv.Itoa(endKey))
+	evaluateResult, err := contract.EvaluateTransaction("GetByRange", strconv.Itoa(startKey), strconv.Itoa(endKey))
 	if err != nil {
-		panic(fmt.Errorf("failed to submit transaction asynchronously: %w", err))
+		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
 	}
-
-	fmt.Printf("\n*** Successfully submitted transaction to transfer ownership from %s to Mark. \n", string(submitResult))
-	fmt.Println("*** Waiting for transaction commit.")
-
-	if commitStatus, err := commit.Status(); err != nil {
-		panic(fmt.Errorf("failed to get commit status: %w", err))
-	} else if !commitStatus.Successful {
-		panic(fmt.Errorf("transaction %s failed to commit with status: %d", commitStatus.TransactionID, int32(commitStatus.Code)))
+	if len(evaluateResult) < 1 {
+		fmt.Println("EMPTY BLOCKCHAIN!")
+		return nil
 	}
-
-	fmt.Printf("*** Transaction committed successfully\n")
-}
-
-// Submit transaction, passing in the wrong number of arguments ,expected to throw an error containing details of any error responses from the smart contract.
-func exampleErrorHandling(contract *client.Contract) {
-	fmt.Println("\n--> Submit Transaction: UpdateAsset asset70, asset70 does not exist and should return an error")
-
-	_, err := contract.SubmitTransaction("UpdateAsset", "asset70", "blue", "5", "Tomoko", "300")
-	if err == nil {
-		panic("******** FAILED to return an error")
+	err2 := json.Unmarshal(evaluateResult, &results)
+	if err2 != nil {
+		panic(fmt.Errorf("failed to unmarshal: %w", err))
 	}
-
-	fmt.Println("*** Successfully caught the error:")
-
-	switch err := err.(type) {
-	case *client.EndorseError:
-		fmt.Printf("Endorse error for transaction %s with gRPC status %v: %s\n", err.TransactionID, status.Code(err), err)
-	case *client.SubmitError:
-		fmt.Printf("Submit error for transaction %s with gRPC status %v: %s\n", err.TransactionID, status.Code(err), err)
-	case *client.CommitStatusError:
-		if errors.Is(err, context.DeadlineExceeded) {
-			fmt.Printf("Timeout waiting for transaction %s commit status: %s", err.TransactionID, err)
-		} else {
-			fmt.Printf("Error obtaining commit status for transaction %s with gRPC status %v: %s\n", err.TransactionID, status.Code(err), err)
-		}
-	case *client.CommitError:
-		fmt.Printf("Transaction %s failed to commit with status %d: %s\n", err.TransactionID, int32(err.Code), err)
-	default:
-		panic(fmt.Errorf("unexpected error type %T: %w", err, err))
-	}
-
-	// Any error that originates from a peer or orderer node external to the gateway will have its details
-	// embedded within the gRPC status error. The following code shows how to extract that.
-	statusErr := status.Convert(err)
-
-	details := statusErr.Details()
-	if len(details) > 0 {
-		fmt.Println("Error Details:")
-
-		for _, detail := range details {
-			switch detail := detail.(type) {
-			case *gateway.ErrorDetail:
-				fmt.Printf("- address: %s, mspId: %s, message: %s\n", detail.Address, detail.MspId, detail.Message)
-			}
-		}
-	}
+	result := formatJSON(evaluateResult)
+	startKey = endKey
+	fmt.Printf("*** Result:%s\n", result)
+	return results
 }
 
 // Format JSON data

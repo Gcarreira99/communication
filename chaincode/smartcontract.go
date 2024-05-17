@@ -15,7 +15,6 @@ type QueryResult struct {
 }
 
 func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, assetID string, data string) error {
-
 	return ctx.GetStub().PutState(assetID, []byte(data))
 }
 
@@ -28,6 +27,30 @@ func (s *SmartContract) GetAsset(ctx contractapi.TransactionContextInterface, as
 		return nil, fmt.Errorf("%s does not exist", assetID)
 	}
 	return assetAsBytes, nil
+}
+
+func (s *SmartContract) GetByRange(ctx contractapi.TransactionContextInterface, startKey string, endKey string) ([]QueryResult, error) {
+	resultsIterator, err := ctx.GetStub().GetStateByRange(startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
+	defer resultsIterator.Close()
+	var results []QueryResult
+
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+
+		if err != nil {
+			return nil, err
+		}
+		asset := string(queryResponse.Value)
+		queryResult := QueryResult{
+			Key:   queryResponse.Key,
+			Asset: asset,
+		}
+		results = append(results, queryResult)
+	}
+	return results, nil
 }
 
 func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {

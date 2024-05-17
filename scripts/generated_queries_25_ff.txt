@@ -1,0 +1,25 @@
+CREATE (m:Source{name: '191308'})
+CREATE (m:User{following: '326412', name: 'User 724255', profile_image_url: 'http://example.com/image277332.jpg', location: 'Location 558087', url: 'http://example.com/user558372', followers: '868514', screen_name: 'user404192'})
+CREATE (m:Hashtag{name: '884226'})
+CREATE (m:Link{url: 'http://example.com/415210'})
+CREATE (m:Tweet{favorites: '230247', import_method: 'user', id_str: '739332', created_at: '2022-01-01T00:00:00Z', text: 'This is a sample tweet.'})
+CREATE (m:Tweet{favorites: '797154', import_method: 'user', id_str: '827744', created_at: '2022-01-01T00:00:00Z', text: 'This is a sample tweet.'})
+CREATE (m:User{location: 'Location 221916', url: 'http://example.com/user377998', followers: '195910', screen_name: 'user55741', following: '554232', name: 'User 868536', profile_image_url: 'http://example.com/image636935.jpg'})
+CREATE (m:Source{name: '105308'})
+CREATE (m:Source{name: '528535'})
+CREATE (m:Tweet{created_at: '2022-01-01T00:00:00Z', text: 'This is a sample tweet.', favorites: '115218', import_method: 'user', id_str: '87115'})
+CREATE (m:Source{name: '1128'})
+CREATE (m:Tweet{favorites: '228729', import_method: 'user', id_str: '428426', created_at: '2022-01-01T00:00:00Z', text: 'This is a sample tweet.'})
+MATCH p=()-[r:REPLY_TO]->() RETURN p LIMIT 25
+MATCH p=()-[r:POSTS]->() RETURN p LIMIT 25
+MATCH p=()-[r:MENTIONS]->() RETURN p LIMIT 25
+MATCH p=()-[r:RETWEETS]->() RETURN p LIMIT 25
+MATCH p=()-[r:USING]->() RETURN p LIMIT 25
+MATCH p=()-[r:TAGS]->() RETURN p LIMIT 25
+MATCH p=()-[r:FOLLOWS]->() RETURN p LIMIT 25
+MATCH (n:Tweet) WHERE n.id_str='1371815021265747970' RETURN n
+MATCH (n) WHERE (n.url) IS NOT NULL RETURN DISTINCT "node" as entity, n.url AS url LIMIT 25 UNION ALL MATCH ()-[r]-() WHERE (r.url) IS NOT NULL RETURN DISTINCT "relationship" AS entity, r.url AS url LIMIT 25
+MATCH (n:Hashtag) RETURN n LIMIT 25
+MATCH (n:User) WHERE n.screen_name='neo4j' RETURN n
+MATCH (n:Me) RETURN n LIMIT 25
+MATCH (n:Tweet) WHERE n.id_str='1371815021265747970' RETURN n
