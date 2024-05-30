@@ -150,29 +150,6 @@ func newSign() identity.Sign {
 	return sign
 }
 
-// Evaluate a transaction to query ledger state.
-func getAllAssets() []FabricResult {
-	fmt.Println("\n--> Evaluate Transaction: GetAllAssets, function returns all the current assets on the ledger")
-	var results []FabricResult
-	evaluateResult, err := contract.EvaluateTransaction("GetAllAssets")
-	if err != nil {
-		panic(fmt.Errorf("failed to evaluate transaction: %w", err))
-	}
-	fmt.Println(evaluateResult)
-	if len(evaluateResult) < 1 {
-		return nil
-	}
-	err2 := json.Unmarshal(evaluateResult, &results)
-	if err2 != nil {
-		panic(fmt.Errorf("failed to unmarshal: %w", err))
-	}
-
-	result := formatJSON(evaluateResult)
-
-	fmt.Printf("*** Result:%s\n", result)
-	return results
-}
-
 func createAsset(query string) {
 	//fmt.Printf("\n--> Submit Transaction: CreateAsset, create new state with ID and query arguments \n")
 	_, err := contract.SubmitTransaction("CreateAsset", strconv.Itoa(endKey), query)

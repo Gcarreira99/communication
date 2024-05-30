@@ -18,12 +18,20 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 var ctx context.Context
 var driver neo4j.DriverWithContext
 var SecureMode bool
 var port = flag.Int("port", 3333, "the port to serve on")
+
+// Only edit to insecure type datasets
+var datasetNumberWriting = "200_i"
+var workloadType = "ff/"
+
+var csvPath = "../../graphs/" + workloadType + "latencyDatabase_" + datasetNumberWriting + ".csv"
+var csvFile *os.File
 
 // should implement the interface myPkgName.ServiceServer
 type serviceServer struct {
@@ -124,13 +132,20 @@ func disconnectDatabase() {
 	}(driver, ctx)
 }
 
+func writeLatency(start time.Time, csvFile *os.File) {
+	elapsed := time.Since(start).Milliseconds()
+	_, err := fmt.Fprintf(csvFile, "%d\n", elapsed)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // WriteDatabase Create a node representing a person named Alice
 func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.WriteDatabaseRequest) (*service.WriteDatabaseResponse, error) {
-	/*if SecureMode {
-		if !checkIntegrity() {
-			return &service.WriteDatabaseResponse{Value: "WRITE NOT SUCCESS: DATABASE COMPROMISED"}, nil
-		}
-	}*/
+	var start time.Time
+	if !SecureMode {
+		start = time.Now()
+	}
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
 		nil,
@@ -141,6 +156,8 @@ func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.Wr
 	}
 	if SecureMode {
 		createAsset(request.Value)
+	} else {
+		writeLatency(start, csvFile)
 	}
 	fmt.Printf("Created %v nodes in %+v.\n",
 		result.Summary.Counters().NodesCreated(),
@@ -149,14 +166,13 @@ func (m *serviceServer) WriteDatabase(ctx_c context.Context, request *service.Wr
 }
 
 func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.ReadDatabaseRequest) (*service.ReadDatabaseResponse, error) {
+	var start time.Time
 	if SecureMode {
 		if !checkIntegrity() {
 			return &service.ReadDatabaseResponse{Value: "READ NOT SUCCESS: DATABASE COMPROMISED"}, nil
 		}
-	}
-	if request.Value == "ALL" {
-		getAllAssets()
-		return &service.ReadDatabaseResponse{Value: "READ SUCCESS"}, nil
+	} else {
+		start = time.Now()
 	}
 	result, err := neo4j.ExecuteQuery(ctx, driver,
 		request.Value,
@@ -164,10 +180,10 @@ func (m *serviceServer) ReadDatabase(ctx_c context.Context, request *service.Rea
 		neo4j.EagerResultTransformer,
 		neo4j.ExecuteQueryWithDatabase("neo4j"))
 	if err != nil {
-		panic(err)
-	}
-	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
+	}
+	if !SecureMode {
+		writeLatency(start, csvFile)
 	}
 	resultJson, _ := json.Marshal(result.Records)
 	return &service.ReadDatabaseResponse{Value: string(resultJson)}, nil
@@ -278,6 +294,9 @@ func main() {
 		//Create a blockchain connection
 		blockchainConnectionStartup()
 		connectVerifier()
+	} else {
+		csvFile, err = os.Create(csvPath)
+		_, err = fmt.Fprintf(csvFile, "Latency\n")
 	}
 
 	//Handles CTRL^C signal to execute a graceful exit by closing the database connection
@@ -299,6 +318,10 @@ func main() {
 				err = clientConnection.Close()
 				if err != nil {
 					return
+				}
+				err = csvFile.Close()
+				if err != nil {
+					log.Fatal(err)
 				}
 			}
 			fmt.Println("Connections closed with success")

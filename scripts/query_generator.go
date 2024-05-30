@@ -51,7 +51,7 @@ func main() {
 	defer file.Close()
 
 	// Redirect output to file
-	fmt.Println("Generated queries are written into generated_queries_25.txt")
+	fmt.Println("Generated queries are written into generated_queries_400.txt")
 	os.Stdout = file
 
 	// Generate CREATE queries for nodes

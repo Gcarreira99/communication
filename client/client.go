@@ -19,12 +19,12 @@ import (
 )
 
 var FileMode bool
-var datasetNumber = "100"
-var datasetNumberReading = "100_ri"
-var workloadType = "ri/"
+var datasetNumberReading = "200_ff"
+
+var datasetNumberWriting = "200_i"
+var workloadType = "ff/"
 
 func sendRequest(client pb.ServiceClient) {
-	//log.Printf("Looking for features within %v", request)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	answer, err := client.Create(ctx, &pb.CreateRequest{From: "A", To: "B", Total: nil})
@@ -101,7 +101,6 @@ func loadCertificates() credentials.TransportCredentials {
 	tlsCredential := credentials.NewTLS(config)
 
 	return tlsCredential
-
 }
 
 func commandOptions(reader *bufio.Reader) string {
@@ -113,7 +112,7 @@ func commandOptions(reader *bufio.Reader) string {
 
 func fileReading(client pb.ServiceClient) *os.File {
 	queryPath := "../scripts/generated_queries_" + datasetNumberReading + ".txt"
-	statsPath := "../../graphs/" + workloadType + "stats_" + datasetNumber + ".csv"
+	statsPath := "../../graphs/" + workloadType + "stats_" + datasetNumberWriting + ".csv"
 	data, err := os.Open(queryPath)
 	if err != nil {
 		log.Fatal(err)
@@ -130,7 +129,7 @@ func fileReading(client pb.ServiceClient) *os.File {
 	for scanner.Scan() {
 		line := scanner.Text()
 		start := time.Now()
-		if strings.Contains(line, "CREATE") {
+		if strings.Contains(line, "CREATE") || strings.Contains(line, "DELETE") || strings.Contains(line, "SET") {
 			writeRequest(client, line)
 		} else {
 			readRequest(client, line)
@@ -142,7 +141,7 @@ func fileReading(client pb.ServiceClient) *os.File {
 }
 
 func writeStats(elapsed int64, csvFile *os.File) {
-	datasetName := "dataset_" + datasetNumber
+	datasetName := "dataset_" + datasetNumberWriting
 
 	size, err := DirSize("../")
 	if err != nil {
@@ -155,8 +154,8 @@ func writeStats(elapsed int64, csvFile *os.File) {
 }
 
 func writeThroughput(elapsed int64) {
-	throughputPath := "../../graphs/" + workloadType + "throughput_" + datasetNumber + ".csv"
-	datasetName := "dataset_" + datasetNumber
+	throughputPath := "../../graphs/" + workloadType + "throughput_" + datasetNumberWriting + ".csv"
+	datasetName := "dataset_" + datasetNumberWriting
 	csvFile, err := os.Create(throughputPath)
 	_, err = fmt.Fprintf(csvFile, "x,y\n")
 	if err != nil {
@@ -192,7 +191,7 @@ func main() {
 		return
 	}
 	//datasetNumberReading = os.Args[3]
-	//datasetNumber = os.Args[3] + "_" + os.Args[2]
+	//datasetNumberWriting = os.Args[3] + "_" + os.Args[2]
 	if os.Args[1] == "-f" {
 		FileMode = true
 	} else if os.Args[1] == "-c" {
